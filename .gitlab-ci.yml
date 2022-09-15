@@ -1,0 +1,110 @@
+stages:
+ - build
+ - stage
+ - build-docker
+ - prod
+
+build:
+  stage: build # указываем во время какой стадии должна отработать задача
+  tags: [ mentorama_stage ]
+  variables:
+    # путь на файловой системе, который строит из имени ветка и названия проекта (ssr-next.react-boilerplate)
+    PROJECT_PATH: '/home/sitest/$CI_COMMIT_REF_SLUG.$CI_PROJECT_NAME/'
+    # основной код проекта размещаем в папке .www (ssr-next.react-boilerplate/www)
+    PROJECT_PATH_WWW: '/home/sitest/$CI_COMMIT_REF_SLUG.$CI_PROJECT_NAME/www'
+  script:
+    - mkdir -p ${PROJECT_PATH_WWW}/.next # создаем папку с проектом
+    - cd $PROJECT_PATH_WWW # переходим в папку проекта
+    - ls -a | grep -v 'node_modules' | grep -v '.next' | xargs rm -rf || true # удаляем все, кроме node_modules и .next
+    - cd - # возвращаемся в предыдущую директорию
+    - cd ${PROJECT_PATH_WWW}/.next # переходим в папку .next
+    - pwd
+    - ls -a | grep -v 'cache' | xargs rm -rf || true # удаляем все, кроме cache
+    - cd - # возвращаемся в предыдущую директорию
+    - (shopt -s dotglob; mv ./* $PROJECT_PATH_WWW) # копируем артефакты билда
+    - cd $PROJECT_PATH_WWW # переходим в папку проекта
+    - pwd
+    - yarn install --frozen-lockfile # ставим пакеты, так как они требуются для работы сервера
+    - yarn build # сборка проекта
+
+
+stage_master:
+  stage: stage
+  tags: [ mentorama_stage ]
+  variables:
+    # путь на файловой системе, который строит из имени ветка и названия проекта (ssr-next.react-boilerplate)
+    PROJECT_PATH: '/home/sitest/$CI_COMMIT_REF_SLUG.$CI_PROJECT_NAME/'
+    # основной код проекта размещаем в папке .www (ssr-next.react-boilerplate/www)
+    PROJECT_PATH_WWW: '/home/sitest/$CI_COMMIT_REF_SLUG.$CI_PROJECT_NAME/www'
+    SITE_URL: 'mentorama-main.mentorama.com.br' #ВАЖНО !!! указать урл сайта
+  script:
+    - PORT=$(sudo /usr/bin/portscan) #Получаем свободный порт
+    - if docker ps | grep "$CI_PROJECT_NAME"; then docker stop $CI_PROJECT_NAME && docker container rm $CI_PROJECT_NAME ; fi
+    - docker run -p 127.0.0.1:$PORT:3000 -v $PROJECT_PATH_WWW:/usr/src/app --name $CI_PROJECT_NAME -d kino13/mentorama_main
+    - sudo /usr/sbin/ngcreate $SITE_URL $PORT # создаём конфиг nginx, переменные указываем только в такой последовательности
+    - sudo nginx -t # тестируем конфиг nginx
+    - sudo nginx -s reload # перезагружаем nginx
+  rules:
+    - if: $CI_COMMIT_BRANCH == 'master'
+
+stage:
+  stage: stage
+  tags: [ mentorama_stage ]
+  variables:
+    # путь на файловой системе, который строит из имени ветка и названия проекта (ssr-next.react-boilerplate)
+    PROJECT_PATH: '/home/sitest/$CI_COMMIT_REF_SLUG.$CI_PROJECT_NAME/'
+    # основной код проекта размещаем в папке .www (ssr-next.react-boilerplate/www)
+    PROJECT_PATH_WWW: '/home/sitest/$CI_COMMIT_REF_SLUG.$CI_PROJECT_NAME/www'
+    SITE_URL: '$CI_COMMIT_REF_SLUG.$CI_MAIN_URL' #ВАЖНО !!! указать урл сайта
+  script:
+    - PORT=$(sudo /usr/bin/portscan) #Получаем свободный порт
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD registry.mentorama.com.br
+    - docker build -t registry.mentorama.com.br/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/$CI_PROJECT_NAME.$CI_COMMIT_REF_SLUG .
+    - docker push registry.mentorama.com.br/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/$CI_PROJECT_NAME.$CI_COMMIT_REF_SLUG
+    - if docker ps | grep "$CI_PROJECT_NAME.$CI_COMMIT_REF_SLUG"; then docker stop $CI_PROJECT_NAME.$CI_COMMIT_REF_SLUG && docker container rm $CI_PROJECT_NAME.$CI_COMMIT_REF_SLUG ; fi
+    - docker run -p 127.0.0.1:$PORT:3000 -v $PROJECT_PATH_WWW:/usr/src/app --name $CI_PROJECT_NAME.$CI_COMMIT_REF_SLUG -d registry.mentorama.com.br/mentorama/mentorama-main/$CI_PROJECT_NAME.$CI_COMMIT_REF_SLUG
+    - sudo /usr/sbin/ngcreate $SITE_URL $PORT # создаём конфиг nginx, переменные указываем только в такой последовательности
+    - sudo nginx -t # тестируем конфиг nginx
+    - sudo nginx -s reload # перезагружаем nginx
+    - docker container  prune -f
+    - docker image prune -f
+  rules:
+    - if: $CI_COMMIT_BRANCH != 'master'
+
+
+build-docker:
+  stage: build-docker
+  tags: [mentorama_stage]
+  variables:
+    # путь на файловой системе, который строит из имени ветка и названия проекта (ssr-next.react-boilerplate)
+    PROJECT_PATH: '/home/sitest/$CI_COMMIT_REF_SLUG.$CI_PROJECT_NAME/'
+    # основной код проекта размещаем в папке .www (ssr-next.react-boilerplate/www)
+    PROJECT_PATH_WWW: '/home/sitest/$CI_COMMIT_REF_SLUG.$CI_PROJECT_NAME/www'
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD registry.mentorama.com.br
+    - docker build -t registry.mentorama.com.br/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/oldsite:latest .
+    - docker push registry.mentorama.com.br/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/oldsite:latest
+    - docker container  prune -f
+    - docker image prune -f
+  rules:
+    - if: $CI_COMMIT_BRANCH == 'master'
+
+prod:
+  stage: prod
+  tags: [ prod ]
+  when: manual
+  variables:
+    # путь на файловой системе, который строит из имени ветка и названия проекта (ssr-next.react-boilerplate)
+    PROJECT_PATH: '/home/new.mentorama'
+    # основной код проекта размещаем в папке .www (ssr-next.react-boilerplate/www)
+    PROJECT_PATH_WWW: '/home/new.mentorama/www'
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD registry.mentorama.com.br
+    - docker pull registry.mentorama.com.br/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/oldsite:latest
+    - docker container stop oldsite
+    - docker container rm oldsite
+    - docker run -p 127.0.0.1:4445:3000 --name oldsite -d registry.mentorama.com.br/${CI_PROJECT_NAMESPACE}/${CI_PROJECT_NAME}/oldsite:latest
+    - docker cp oldsite:/usr/src/app/dist $PROJECT_PATH_WWW/
+    - docker container  prune -f
+    - docker image prune -f
+  only: [master]
