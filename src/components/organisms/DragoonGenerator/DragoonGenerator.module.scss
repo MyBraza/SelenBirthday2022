@@ -1,0 +1,12 @@
+@import 'src/styles/variables';
+
+.container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 1rem;
+}
+
+.menu {
+  padding: 1rem;
+  background-color: $bg-secondary;
+}

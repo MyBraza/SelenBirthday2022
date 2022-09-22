@@ -1,0 +1,8 @@
+export { default as eye1 } from './01.png'
+export { default as eye2 } from './02.png'
+export { default as eye3 } from './03.png'
+export { default as eye4 } from './04.png'
+export { default as eye5 } from './05.png'
+export { default as eye7 } from './07.png'
+export { default as eye8 } from './08.png'
+export { default as eye9 } from './09.png'

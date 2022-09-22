@@ -2,7 +2,7 @@ import { ICommonState, TCommonActions } from '@store/commonStore/types'
 import { HELLO_WORLD } from '@store/commonStore/actionTypes'
 
 const initialState: ICommonState = {
-  hello: 'world'
+  hello: ''
 }
 
 const commonReducer = (state = initialState, action: TCommonActions) => {

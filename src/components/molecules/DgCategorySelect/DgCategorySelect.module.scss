@@ -1,0 +1,18 @@
+.container {
+  display: flex;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.slider {
+  display: flex;
+}
+
+.item {
+}
+
+.icon {
+  min-width: 5rem;
+  width: 5rem;
+  height: auto;
+}
